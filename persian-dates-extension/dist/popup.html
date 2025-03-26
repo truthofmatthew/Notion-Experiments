@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>نوشن فارسی</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Badge -->
+    <div class="badge-experimental">آزمایشی</div>
+
+    <!-- Header -->
+    <div class="logo-container">
+      <img src="assets/icons/notionfarsi_logo.svg" alt="Notion Farsi Logo" class="logo">
+      <span class="header-text">نوشن فارسی</span>
+    </div>
+
+    <!-- Toggle 1 -->
+    <div class="toggle-row" style="top:68px;">
+      <label class="switch">
+        <input type="checkbox" id="persian-toggle" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="persian-toggle" class="toggle-label">تاریخ شمسی</label>
+      <div class="icon-wrap">
+        <img src="assets/icons/calendar_icon.svg" alt="Calendar Icon">
+      </div>
+    </div>
+
+    <!-- Toggle 2 -->
+    <div class="toggle-row" style="top:109px;">
+      <label class="switch">
+        <input type="checkbox" id="font-toggle" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="font-toggle" class="toggle-label">فونت فارسی</label>
+      <div class="icon-wrap">
+        <img src="assets/icons/farsi_icon.svg" alt="Farsi Icon">
+      </div>
+    </div>
+
+    <!-- Font Selector -->
+    
+    <div id="font-selector-container" class="font-selector-container">
+     
+      <select id="font-selector"></select>
+      
+    </div>
+    <div id="call-message">اگه چیزی خراب بود، یه خبر بهم بده  🐞</div>
+
+
+
+    <!-- Separator -->
+    <hr class="separator">
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://github.com/truthofmatthew" target="_blank" class="social github">
+        <img src="assets/icons/GitHub_Icon.svg" alt="GitHub">
+      </a>
+      <a href="https://www.linkedin.com/in/truthofmatthew/" target="_blank" class="social linkedin">
+        <img src="assets/icons/Linkedin_Icon.svg" alt="LinkedIn">
+      </a>
+      <div class="avatar">
+        <img src="assets/icons/boy_icon.svg" alt="Boy Icon">
+      </div>
+      <span class="footer-name">Matthew Truth</span>
+    </div>
+    
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

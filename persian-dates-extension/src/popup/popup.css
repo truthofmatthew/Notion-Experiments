@@ -1,0 +1,233 @@
+.container {
+  position: relative;
+  width: 300px;
+  height: 273px;
+  background: #fffdfa;
+  margin: 0 auto;
+  font-family: 'Vazirmatn', sans-serif;
+}
+
+.badge-experimental {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  width: 36px;
+  height: 18px;
+  background: #ea4e43;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  text-align: center;
+  line-height: 18px;
+  border-radius: 4px;
+}
+
+.logo-container {
+  position: absolute;
+  top: 15px;
+  left: 186px;
+}
+
+.logo {
+  position: absolute;
+  top: 0;
+  left: 74px;
+  width: 23px;
+  height: 22px;
+}
+
+.header-text {
+  padding-left: 5px;
+  font-size: 12.5px;
+  font-weight: bold;
+  color: #050505;
+  line-height: 19px;
+}
+
+.toggle-row {
+  position: absolute;
+  left: 22px;
+  width: 256px;
+  height: 26px;
+}
+
+/* Switch style (from old code) */
+.switch {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 34px;
+  height: 18px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .2s;
+  border-radius: 4px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #fff;
+  transition: .2s;
+  border-radius: 20%;
+}
+.switch input:checked + .slider {
+  background-color: #2F80ED;
+}
+.switch input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+/* Toggle label */
+.toggle-label {
+  position: absolute;
+  top: 0;
+  right: 25px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.icon-wrap {
+  /* position: absolute; */
+  top: 3px;
+  
+  width: 40px;
+  height: 21px;
+}
+
+.icon-wrap img {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+}
+
+
+
+.separator {
+  position: absolute;
+  top: 225px;
+  left: 10px;
+  width: 280px;
+  border: none;
+  height: 1px;
+  background: #ccc;
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 34px;
+}
+
+.social {
+  position: absolute;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 5px;
+}
+
+.github {
+  right: 48px;
+}
+
+.linkedin {
+  right: 12px;
+}
+
+.social img {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  top: 5px;
+  left: 5px;
+}
+
+.avatar {
+  position: absolute;
+  top: 5px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+}
+
+.footer-name {
+  position: absolute;
+  top: 12px;
+  left: 42px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #000000;
+}
+
+/* Font selector (from old code) */
+.font-selector-container {
+  position: absolute;
+  top: 152px;
+  left: 18px;
+  
+  
+  display: flex;
+  align-items: center;
+  
+  font-size: 10px;
+  
+
+}
+
+
+  .font-selector-container.visible {
+    
+    display: block;
+  }
+  .font-selector-container select {
+  
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background: url('assets/icons/arrow_down.svg') no-repeat right 10px center / 12px auto;
+      padding-right: 30px;
+    font-family: 'Vazirmatn', sans-serif;
+    width: 266px;
+    height: 36px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    
+  }
+  .font-selector-container .font-author {
+    font-size: 12px;
+    color: #777;
+    margin-top: 4px;
+    font-style: italic;
+  }
+  
+  #call-message {
+    text-align: center;
+    padding-top: 200px;
+    font-size: 13px;
+  }
+  

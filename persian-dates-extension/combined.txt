@@ -1,0 +1,2108 @@
+convertTable.ts
+import { parseGregorian, formatJalali, isPersianDate, persianToGregorian } from "./dateUtils";
+
+// Only track errors - no state storage
+let conversionErrorCount = 0;
+
+// Flag to prevent observer loops
+let isMakingChanges = false;
+
+// Keep track of the last time we processed dates
+let lastProcessedTime = 0;
+
+// Main conversion function - completely stateless
+export function convertTable(persianInput: boolean): number {
+  const startTime = Date.now();
+  console.log("mtlog: Starting table conversion, persianInput =", persianInput);
+  
+  // Set the flag that we're making changes
+  isMakingChanges = true;
+  let conversionCount = 0;
+  
+  try {
+    // Process each date cell in Notion's table
+    document.querySelectorAll<HTMLElement>("[data-testid='property-value'] div, div.notion-date").forEach(el => {
+      // Skip elements that are not visible
+      if (!isElementVisible(el)) return;
+      
+      const current = el.innerText.trim();
+      
+      // Skip empty cells
+      if (!current) return;
+      
+      if (persianInput) {
+        // If we want Persian dates
+        
+        // Skip if already in Persian format
+        if (isPersianDate(current)) {
+          return;
+        }
+        
+        // Try to parse as Gregorian date
+        const parsedDate = parseGregorian(current);
+        
+        if (parsedDate) {
+          // This is a valid Gregorian date - convert it using jalaali-js
+          const jalaliDate = formatJalali(parsedDate);
+          
+          // Skip invalid conversions
+          if (jalaliDate === "Invalid Date") {
+            console.warn("Skipping invalid date conversion:", current);
+            return;
+          }
+          
+          // Update visible text to Persian if it's different
+          if (el.innerText !== jalaliDate) {
+            // Store original content in a data attribute for restoration
+            if (!el.hasAttribute('data-original-date')) {
+              el.setAttribute('data-original-date', current);
+            }
+            
+            el.innerText = jalaliDate;
+            conversionCount++;
+            console.log("mtlog: Converted", current, "to", jalaliDate);
+          }
+        }
+      } else {
+        // If we want Gregorian dates
+        
+        // Check if this is a Persian date that needs restoration
+        if (isPersianDate(current)) {
+          // Try to get the original date if stored
+          const originalDate = el.getAttribute('data-original-date');
+          
+          if (originalDate) {
+            // We have the original, use it
+            el.innerText = originalDate;
+            el.removeAttribute('data-original-date');
+            conversionCount++;
+            console.log("mtlog: Restored original date:", originalDate);
+          } else {
+            // No original stored, convert from Persian using jalaali-js
+            const gregorianDate = persianToGregorian(current);
+            if (gregorianDate) {
+              el.innerText = gregorianDate;
+              conversionCount++;
+              console.log("mtlog: Converted Persian to Gregorian:", current, "->", gregorianDate);
+            }
+          }
+        }
+      }
+    });
+    
+    // Update the last processed timestamp
+    lastProcessedTime = startTime;
+    
+    console.log(`mtlog: Processed ${conversionCount} dates`);
+  } catch (error) {
+    console.error("Error during conversion:", error);
+    conversionErrorCount++;
+  } finally {
+    // Always reset the flag
+    isMakingChanges = false;
+  }
+  
+  return conversionCount;
+}
+
+// Helper function to check if an element is visible
+function isElementVisible(el: HTMLElement): boolean {
+  return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+}
+
+// Function to reset all dates to their original values
+export function resetAllConversions(): number {
+  console.log("mtlog: Resetting all conversions");
+  isMakingChanges = true;
+  let count = 0;
+  
+  try {
+    // Reset error count
+    conversionErrorCount = 0;
+    
+    // Strategy 1: First try to restore from original data attribute
+    document.querySelectorAll<HTMLElement>('[data-original-date]').forEach(el => {
+      const originalDate = el.getAttribute('data-original-date');
+      if (originalDate) {
+        el.innerText = originalDate;
+        el.removeAttribute('data-original-date');
+        count++;
+        console.log("mtlog: Reset to original date:", originalDate);
+      }
+    });
+    
+    // Strategy 2: For any remaining Persian dates, convert them to Gregorian
+    document.querySelectorAll<HTMLElement>("[data-testid='property-value'] div, div.notion-date").forEach(el => {
+      if (!isElementVisible(el)) return;
+      
+      const current = el.innerText.trim();
+      if (!current) return;
+      
+      // Check if it's a Persian date without original data
+      if (isPersianDate(current) && !el.hasAttribute('data-original-date')) {
+        const gregorianDate = persianToGregorian(current);
+        if (gregorianDate) {
+          el.innerText = gregorianDate;
+          count++;
+          console.log("mtlog: Converted Persian to Gregorian:", current, "->", gregorianDate);
+        }
+      }
+    });
+    
+    console.log(`mtlog: Reset ${count} date cells`);
+  } finally {
+    isMakingChanges = false;
+  }
+  
+  return count;
+}
+
+// Check if a conversion was done recently
+export function wasRecentlyProcessed(timeThresholdMs = 500): boolean {
+  return (Date.now() - lastProcessedTime) < timeThresholdMs;
+}
+
+// Check if we're currently making changes
+export function isCurrentlyMakingChanges(): boolean {
+  return isMakingChanges;
+}
+
+// Get the current error count
+export function getErrorCount(): number {
+  return conversionErrorCount;
+}
+
+
++++++
+dateUtils.ts
+import { format } from "date-fns-jalali";
+// Use require for CommonJS modules
+const jalaali = require('jalaali-js');
+
+// Month name mapping for parsing
+export const months: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12
+};
+
+/**
+ * Improved function to check if a string appears to be a Persian date
+ */
+export function isPersianDate(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  
+  // Clean the input
+  text = text.trim();
+  
+  // Pattern 1: yyyy/mm/dd format with years between 1300-1499
+  const standardFormat = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (standardFormat) {
+    const year = parseInt(standardFormat[1], 10);
+    const month = parseInt(standardFormat[2], 10);
+    const day = parseInt(standardFormat[3], 10);
+    
+    // Basic validation
+    if (year >= 1300 && year < 1500 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return jalaali.isValidJalaaliDate(year, month, day);
+    }
+  }
+  
+  // Pattern 2: Persian month names
+  const persianMonthNames = [
+    'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 
+    'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+  ];
+  
+  for (const month of persianMonthNames) {
+    if (text.includes(month)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Parse a Gregorian date string into a Date object
+ * Handles various common date formats
+ */
+export function parseGregorian(text: string): Date | null {
+  if (!text || typeof text !== 'string') return null;
+  
+  // Clean the input
+  text = text.trim();
+  
+  // Quick check: if it looks like a Persian date, don't try to parse as Gregorian
+  if (isPersianDate(text)) {
+    return null;
+  }
+  
+  try {
+    // Month Day, Year (e.g., "January 15, 2023")
+    let m = text.match(/\b([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\b/);
+    if (m) {
+      const mon = months[m[1].toLowerCase()];
+      if (!mon) return null;
+      return new Date(+m[3], mon - 1, +m[2]);
+    }
+    
+    // ISO format: Year-Month-Day or Year/Month/Day (e.g., "2023-01-15" or "2023/01/15")
+    m = text.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+    if (m) {
+      const year = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10);
+      const day = parseInt(m[3], 10);
+      
+      // Skip if it looks like a Persian date
+      if (year >= 1300 && year < 1500) {
+        // Only consider it Gregorian if it's a common year like 1400 (which could be both)
+        // and has English context clues
+        const hasEnglishContext = Object.keys(months).some(month => 
+          text.toLowerCase().includes(month.toLowerCase())
+        );
+        
+        if (!hasEnglishContext) {
+          return null;
+        }
+      }
+      
+      // Basic validation
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      return new Date(year, month - 1, day);
+    }
+    
+    // US format: Month/Day/Year (e.g., "1/15/2023")
+    m = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+    if (m) {
+      const month = parseInt(m[1], 10);
+      const day = parseInt(m[2], 10);
+      const year = parseInt(m[3], 10);
+      
+      // Skip if it looks like a Persian date
+      if (year >= 1300 && year < 1500) {
+        return null;
+      }
+      
+      // Basic validation
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      return new Date(year, month - 1, day);
+    }
+    
+    // Year Month Day (e.g., "2023 January 15")
+    m = text.match(/\b(\d{4})\s+([A-Za-z]+)\s+(\d{1,2})\b/);
+    if (m) {
+      const mon = months[m[2].toLowerCase()];
+      if (!mon) return null;
+      return new Date(+m[1], mon - 1, +m[3]);
+    }
+    
+    // Try for relative dates like "Today", "Yesterday", "Tomorrow"
+    if (/today/i.test(text)) {
+      return new Date();
+    }
+    if (/yesterday/i.test(text)) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      return yesterday;
+    }
+    if (/tomorrow/i.test(text)) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow;
+    }
+    
+  } catch (error) {
+    console.error("Error parsing date:", text, error);
+  }
+  
+  return null;
+}
+
+/**
+ * Convert a Date object to Persian (Jalali) date format using jalaali-js
+ */
+export function formatJalali(d: Date): string {
+  // Validate input
+  if (!d || !(d instanceof Date) || isNaN(d.getTime())) {
+    console.error("Invalid date passed to formatJalali", d);
+    return "Invalid Date";
+  }
+
+  try {
+    // Use jalaali-js for accurate conversion
+    const jalali = jalaali.toJalaali(d);
+    
+    // Format as yyyy/mm/dd
+    return `${jalali.jy}/${jalali.jm.toString().padStart(2, '0')}/${jalali.jd.toString().padStart(2, '0')}`;
+  } catch (error) {
+    console.error("Error in formatJalali:", error);
+    return "Invalid Date";
+  }
+}
+
+/**
+ * Convert a Persian date string to a Gregorian Date object using jalaali-js
+ * @param persianDateStr Persian date string in format yyyy/mm/dd
+ */
+export function persianToGregorian(persianDateStr: string): string | null {
+  try {
+    // Parse the Persian date string
+    const match = persianDateStr.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+    if (!match) return null;
+    
+    const jy = parseInt(match[1], 10);
+    const jm = parseInt(match[2], 10);
+    const jd = parseInt(match[3], 10);
+    
+    // Check if it's a valid Persian date
+    if (!jalaali.isValidJalaaliDate(jy, jm, jd)) {
+      return null;
+    }
+    
+    // Convert to Gregorian
+    const gregorian = jalaali.toGregorian(jy, jm, jd);
+    
+    // Format as yyyy/mm/dd
+    return `${gregorian.gy}/${gregorian.gm.toString().padStart(2, '0')}/${gregorian.gd.toString().padStart(2, '0')}`;
+  } catch (error) {
+    console.error("Error converting Persian to Gregorian:", error);
+    return null;
+  }
+}
+
++++++
+test.ts
+// Use require for CommonJS module
+const jalaali = require('jalaali-js');
+
+// Test various conversions
+console.log("TESTING JALAALI CONVERSIONS");
+console.log("==========================");
+
+// Test 1: Convert Gregorian to Jalaali
+const gregorianDate = new Date(2023, 2, 21); // March 21, 2023
+const jalaliDate = jalaali.toJalaali(gregorianDate);
+console.log("Test 1: Gregorian to Jalaali");
+console.log("Gregorian:", gregorianDate.toDateString());
+console.log("Jalaali:", `${jalaliDate.jy}/${jalaliDate.jm}/${jalaliDate.jd}`);
+console.log();
+
+// Test 2: Convert Jalaali to Gregorian
+const jy = 1402;
+const jm = 1;
+const jd = 1;
+const gregorian = jalaali.toGregorian(jy, jm, jd);
+console.log("Test 2: Jalaali to Gregorian");
+console.log("Jalaali:", `${jy}/${jm}/${jd}`);
+console.log("Gregorian:", `${gregorian.gy}/${gregorian.gm}/${gregorian.gd}`);
+console.log();
+
+// Test 3: Check if 2025/1/1 correctly converts to 1403/10/11
+const futureDate = new Date(2025, 0, 1); // January 1, 2025
+const futurePersian = jalaali.toJalaali(futureDate);
+console.log("Test 3: Future date conversion");
+console.log("Gregorian:", futureDate.toDateString());
+console.log("Jalaali:", `${futurePersian.jy}/${futurePersian.jm}/${futurePersian.jd}`);
+console.log();
+
+// Test 4: Check if leap years are handled correctly
+const isLeap1403 = jalaali.isLeapJalaaliYear(1403);
+const isLeap1404 = jalaali.isLeapJalaaliYear(1404);
+console.log("Test 4: Leap year detection");
+console.log("Is 1403 a leap year?", isLeap1403);
+console.log("Is 1404 a leap year?", isLeap1404);
+console.log();
+
+// Test 5: Verify month lengths
+console.log("Test 5: Month lengths");
+console.log("Length of month 12 in year 1403:", jalaali.jalaaliMonthLength(1403, 12));
+console.log("Length of month 12 in year 1404:", jalaali.jalaaliMonthLength(1404, 12)); 
++++++
+convertNotif.ts
+// Import the jalaali-js library for accurate date conversions
+const jalaali = require('jalaali-js');
+import { parseGregorian, isPersianDate } from "./dateUtils";
+
+// Store the floating panel element
+let floatingPanel: HTMLElement | null = null;
+// Store the show button element
+let showButton: HTMLElement | null = null;
+// Track which dates we've converted
+const convertedDates = new Map<string, { persianDate: string, element: HTMLElement }>();
+// Track panel state
+let isPanelHidden = false;
+// Track panel position
+let panelPosition = { top: '', left: '', right: '20px', bottom: '20px' };
+
+/**
+ * Convert date mentions/reminders in Notion
+ * These appear as @Date elements like "@April 26, 2025"
+ */
+export function convertDateMentions(persianInput: boolean): number {
+  console.log("mtlog: Converting date mentions, persianInput =", persianInput);
+  let conversionCount = 0;
+  
+  try {
+    // Handle based on Persian mode
+    if (persianInput) {
+      // Load panel state from storage
+      loadPanelState();
+      
+      // Create the floating panel if needed
+      createFloatingPanel();
+      
+      // Find all date mention tokens in Notion
+      const mentions = document.querySelectorAll<HTMLElement>('.notion-text-mention-token .notion-reminder');
+      
+      // Clear current conversions
+      convertedDates.clear();
+      
+      // Process each date mention
+      mentions.forEach(reminder => {
+        const current = reminder.textContent || "";
+        const currentTrimmed = current.trim();
+        if (!currentTrimmed) return;
+        
+        // Skip if already in Persian format
+        if (isPersianDate(currentTrimmed)) return;
+        
+        // Try to extract the date info to convert it
+        const dateInfo = extractDateFromMention(currentTrimmed);
+        if (dateInfo) {
+          const { date, display } = dateInfo;
+          
+          // Convert to Persian date
+          const jalali = jalaali.toJalaali(date);
+          
+          // Create Persian date format
+          const persianMonths = [
+            'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+            'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+          ];
+          
+          const persianDate = `${persianMonths[jalali.jm - 1]} ${jalali.jd}، ${jalali.jy}`;
+          
+          // Store the conversion with element reference
+          convertedDates.set(display, { persianDate, element: reminder });
+          conversionCount++;
+          console.log("mtlog: Converted mention", display, "to", persianDate);
+        }
+      });
+      
+      // Update the panel with conversions
+      updatePanelContent();
+      
+      // Apply panel visibility based on saved state
+      if (isPanelHidden) {
+        hidePanel();
+      } else {
+        showPanel();
+      }
+      
+    } else {
+      // Remove panel in Gregorian mode
+      removeFloatingPanel();
+      convertedDates.clear();
+    }
+    
+    return conversionCount;
+  } catch (error) {
+    console.error("Error converting date mentions:", error);
+    return conversionCount;
+  }
+}
+
+/**
+ * Create floating panel with Persian date conversions
+ */
+function createFloatingPanel() {
+  // Only create if it doesn't exist
+  if (floatingPanel && document.body.contains(floatingPanel)) return;
+
+  // Create panel container
+  floatingPanel = document.createElement('div');
+  floatingPanel.id = 'persian-dates-panel';
+  floatingPanel.style.cssText = `
+    position: fixed;
+    ${panelPosition.bottom ? 'bottom: ' + panelPosition.bottom + ';' : ''}
+    ${panelPosition.right ? 'right: ' + panelPosition.right + ';' : ''}
+    ${panelPosition.top ? 'top: ' + panelPosition.top + ';' : ''}
+    ${panelPosition.left ? 'left: ' + panelPosition.left + ';' : ''}
+    width: 280px;
+    max-height: 400px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+    z-index: 9999;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  `;
+
+  // Create header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    background: #f7f6f3;
+  `;
+  header.innerHTML = `
+    <div style="font-weight: 600; font-size: 14px;">Persian Dates</div>
+    <div style="display: flex; gap: 8px;">
+      <button id="persian-dates-minimize" style="
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">−</button>
+      <button id="persian-dates-hide" style="
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">×</button>
+    </div>
+  `;
+  floatingPanel.appendChild(header);
+
+  // Create content area
+  const content = document.createElement('div');
+  content.id = 'persian-dates-content';
+  content.style.cssText = `
+    padding: 16px;
+    overflow-y: auto;
+    max-height: 340px;
+    display: block;
+  `;
+  floatingPanel.appendChild(content);
+
+  // Add to document
+  document.body.appendChild(floatingPanel);
+
+  // Make panel draggable
+  makeDraggable(floatingPanel, header);
+
+  // Handle minimize button
+  const minimizeBtn = floatingPanel.querySelector('#persian-dates-minimize');
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener('click', () => {
+      const content = floatingPanel?.querySelector('#persian-dates-content');
+      if (content) {
+        if ((content as HTMLElement).style.display === 'none') {
+          // Expand
+          (content as HTMLElement).style.display = 'block';
+          (minimizeBtn as HTMLElement).textContent = '−';
+        } else {
+          // Collapse
+          (content as HTMLElement).style.display = 'none';
+          (minimizeBtn as HTMLElement).textContent = '+';
+        }
+      }
+    });
+  }
+  
+  // Handle hide button
+  const hideBtn = floatingPanel.querySelector('#persian-dates-hide');
+  if (hideBtn) {
+    hideBtn.addEventListener('click', () => {
+      hidePanel();
+      savePanelState();
+    });
+  }
+  
+  // Create show button (initially hidden)
+  createShowButton();
+}
+
+/**
+ * Create a small button to show the panel when it's hidden
+ */
+function createShowButton() {
+  // Remove existing button if any
+  if (showButton && document.body.contains(showButton)) {
+    document.body.removeChild(showButton);
+  }
+  
+  // Create new button
+  showButton = document.createElement('div');
+  showButton.id = 'persian-dates-show-button';
+  showButton.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9999;
+    font-size: 18px;
+    color: #333;
+  `;
+  showButton.innerHTML = `<span style="font-weight: bold;">🗓️</span>`;
+  showButton.title = "Show Persian Dates";
+  
+  // Add click event
+  showButton.addEventListener('click', () => {
+    showPanel();
+    savePanelState();
+  });
+  
+  // Add to document
+  document.body.appendChild(showButton);
+}
+
+/**
+ * Hide the panel and show the small button
+ */
+function hidePanel() {
+  if (!floatingPanel || !showButton) return;
+  
+  // Save position before hiding
+  if (floatingPanel.style.top) panelPosition.top = floatingPanel.style.top;
+  if (floatingPanel.style.left) panelPosition.left = floatingPanel.style.left;
+  if (floatingPanel.style.right) panelPosition.right = floatingPanel.style.right;
+  if (floatingPanel.style.bottom) panelPosition.bottom = floatingPanel.style.bottom;
+  
+  // Hide panel
+  floatingPanel.style.display = 'none';
+  
+  // Show button
+  showButton.style.display = 'flex';
+  
+  // Update state
+  isPanelHidden = true;
+}
+
+/**
+ * Show the panel and hide the small button
+ */
+function showPanel() {
+  if (!floatingPanel || !showButton) return;
+  
+  // Show panel
+  floatingPanel.style.display = 'flex';
+  
+  // Hide button
+  showButton.style.display = 'none';
+  
+  // Update state
+  isPanelHidden = false;
+}
+
+/**
+ * Save panel state to storage
+ */
+function savePanelState() {
+  try {
+    const state = {
+      hidden: isPanelHidden,
+      position: panelPosition
+    };
+    
+    localStorage.setItem('persian-dates-panel-state', JSON.stringify(state));
+  } catch (error) {
+    console.error("Error saving panel state:", error);
+  }
+}
+
+/**
+ * Load panel state from storage
+ */
+function loadPanelState() {
+  try {
+    const savedState = localStorage.getItem('persian-dates-panel-state');
+    if (savedState) {
+      const state = JSON.parse(savedState);
+      isPanelHidden = state.hidden;
+      if (state.position) {
+        panelPosition = state.position;
+      }
+    }
+  } catch (error) {
+    console.error("Error loading panel state:", error);
+  }
+}
+
+/**
+ * Update panel content with current conversions
+ */
+function updatePanelContent() {
+  if (!floatingPanel) return;
+
+  const content = floatingPanel.querySelector('#persian-dates-content');
+  if (!content) return;
+
+  if (convertedDates.size === 0) {
+    content.innerHTML = `
+      <div style="text-align: center; color: #888; padding: 8px 0;">
+        No date mentions found.
+      </div>
+    `;
+    return;
+  }
+
+  // Generate conversion list
+  let html = '';
+  
+  convertedDates.forEach(({ persianDate, element }, gregorianDate) => {
+    html += `
+      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0;">
+        <div style="margin-bottom: 4px; direction: rtl; text-align: right;">
+          <span style="font-weight: 600; cursor: pointer;" data-date="${gregorianDate}">${persianDate}</span>
+        </div>
+        <div style="font-size: 12px; color: #888;">
+          ${gregorianDate}
+        </div>
+      </div>
+    `;
+  });
+
+  // Add copy instructions
+  html += `
+    <div style="font-size: 12px; color: #888; margin-top: 8px; text-align: center;">
+      Click a date to copy Persian format or scroll to its location
+    </div>
+  `;
+
+  content.innerHTML = html;
+
+  // Add click handlers for copying and scrolling
+  const dateElements = content.querySelectorAll('span[data-date]');
+  dateElements.forEach(element => {
+    element.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const gregorianDate = target.getAttribute('data-date');
+      if (!gregorianDate) return;
+      
+      const conversion = convertedDates.get(gregorianDate);
+      if (!conversion) return;
+      
+      // Scroll the original element into view
+      conversion.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Show a highlight effect
+      const originalElement = conversion.element;
+      originalElement.style.backgroundColor = '#fff3cd';
+      setTimeout(() => {
+        originalElement.style.backgroundColor = '';
+      }, 2000);
+    });
+  });
+}
+
+/**
+ * Show a toast message when text is copied
+ */
+function showCopyToast(message: string) {
+  // Remove existing toast if any
+  const existingToast = document.getElementById('persian-dates-toast');
+  if (existingToast) {
+    document.body.removeChild(existingToast);
+  }
+
+  // Create toast
+  const toast = document.createElement('div');
+  toast.id = 'persian-dates-toast';
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 60px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 10000;
+  `;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  // Remove after 2 seconds
+  setTimeout(() => {
+    if (document.body.contains(toast)) {
+      document.body.removeChild(toast);
+    }
+  }, 2000);
+}
+
+/**
+ * Remove the floating panel
+ */
+function removeFloatingPanel() {
+  if (floatingPanel && document.body.contains(floatingPanel)) {
+    document.body.removeChild(floatingPanel);
+    floatingPanel = null;
+  }
+  
+  if (showButton && document.body.contains(showButton)) {
+    document.body.removeChild(showButton);
+    showButton = null;
+  }
+}
+
+/**
+ * Make an element draggable
+ */
+function makeDraggable(element: HTMLElement, handle: HTMLElement) {
+  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  
+  // Set handle for dragging
+  handle.onmousedown = dragMouseDown;
+  
+  function dragMouseDown(e: MouseEvent) {
+    e.preventDefault();
+    // Get the mouse cursor position at startup
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    document.onmouseup = closeDragElement;
+    // Call a function whenever the cursor moves
+    document.onmousemove = elementDrag;
+  }
+  
+  function elementDrag(e: MouseEvent) {
+    e.preventDefault();
+    // Calculate the new cursor position
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    // Set the element's new position
+    element.style.top = (element.offsetTop - pos2) + "px";
+    element.style.left = (element.offsetLeft - pos1) + "px";
+    // Clear any right/bottom positioning
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    
+    // Save updated position to our tracking object
+    panelPosition = {
+      top: element.style.top,
+      left: element.style.left,
+      right: '',
+      bottom: ''
+    };
+  }
+  
+  function closeDragElement() {
+    // Stop moving when mouse button is released
+    document.onmouseup = null;
+    document.onmousemove = null;
+    
+    // Save position after drag ends
+    savePanelState();
+  }
+}
+
+/**
+ * Extract date information from a mention string like "April 26, 2025"
+ */
+function extractDateFromMention(text: string): { date: Date, display: string } | null {
+  try {
+    // Replace multiple spaces with single space and trim
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    
+    // Try to parse the date
+    const date = parseGregorian(cleaned);
+    if (date) {
+      return { date, display: cleaned };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error extracting date from mention:", error);
+    return null;
+  }
+}
+
+/**
+ * Reset all date mentions to their original values
+ */
+export function resetDateMentions(): number {
+  console.log("mtlog: Resetting date mentions");
+  
+  // Just remove panel and clear conversions
+  const count = convertedDates.size;
+  convertedDates.clear();
+  removeFloatingPanel();
+  
+  return count;
+} 
++++++
+fontInjection.ts
+// Font injection functionality
+let fontStyleElement: HTMLStyleElement | null = null;
+let observer: MutationObserver | null = null;
+let currentFont: string = "Vazirmatn"; // Default font
+
+// Unicode range constant
+const UNICODE_RANGE = 'U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF';
+
+// Font options
+export const defaultFonts = [
+  { en_name: "Vazirmatn", fa_name: "وزیر متن", creator: "زنده یاد صابر راستی کردار" },
+  { en_name: "Sahel", fa_name: "ساحل", creator: "زنده یاد صابر راستی کردار" },
+  { en_name: "Parastoo", fa_name: "پرستو", creator: "زنده یاد صابر راستی کردار" }
+];
+
+// All fonts CSS
+const ALL_FONTS_CSS = `
+/* ========== Vazirmatn ========== */
+@font-face {
+  font-family: "Vazirmatn";
+  src:
+    url("${chrome.runtime.getURL('assets/fonts/vazir/Vazirmatn[wght].woff2')}")
+      format("woff2 supports variations"),
+    url("${chrome.runtime.getURL('assets/fonts/vazir/Vazirmatn[wght].woff2')}")
+      format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: ${UNICODE_RANGE};
+}
+
+/* ========== Sahel ========== */
+@font-face {
+  font-family: "Sahel";
+  src:
+    url("${chrome.runtime.getURL('assets/fonts/sahel/Sahel-VF.woff2')}")
+      format("woff2 supports variations"),
+    url("${chrome.runtime.getURL('assets/fonts/sahel/Sahel-VF.woff2')}")
+      format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: ${UNICODE_RANGE};
+}
+
+/* ========== Parastoo ========== */
+@font-face {
+  font-family: "Parastoo";
+  src: url("${chrome.runtime.getURL('assets/fonts/parastoo/Parastoo.woff2')}") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  unicode-range: ${UNICODE_RANGE};
+}
+@font-face {
+  font-family: "Parastoo";
+  src: url("${chrome.runtime.getURL('assets/fonts/parastoo/Parastoo-Bold.woff2')}")
+    format("woff2");
+  font-weight: bold;
+  font-style: normal;
+  unicode-range: ${UNICODE_RANGE};
+}
+
+/* Keep code blocks in LTR */
+.notion-text-content[data-content-type="code"] {
+  direction: ltr !important;
+  text-align: left !important;
+  font-family: "SF Mono", "Consolas", "Monaco", "Andale Mono", monospace !important;
+}
+`;
+
+// Convert English digits to Persian digits
+function toPersianDigits(input: string): string {
+  return input.replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[parseInt(d)]);
+}
+
+// Function to check if text contains Persian/Arabic characters
+function containsPersianArabic(text: string): boolean {
+  const persianArabicRegex = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  return persianArabicRegex.test(text);
+}
+
+// Process a text node
+function processTextNode(node: Text): void {
+  const text = node.textContent || '';
+  if (!containsPersianArabic(text)) return;
+  const container = node.parentElement?.closest('.notranslate[data-content-editable-leaf="true"]') as HTMLElement;
+  if (!container || container.closest('[data-content-type="code"]')) return;
+  container.style.fontFamily = `"${currentFont}", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif`;
+  container.style.direction = 'rtl';
+  container.style.textAlign = 'right';
+}
+
+// Process all text nodes in a subtree
+function processSubtree(root: Node): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let node: Text | null;
+  while (node = walker.nextNode() as Text) {
+    processTextNode(node);
+  }
+}
+
+// Update numbered list block: convert number to Persian and set RTL
+function updateNumberedListBlock(block: Element): void {
+  const pseudo = block.querySelector('.pseudoBefore') as HTMLElement | null;
+  if (pseudo) {
+    let content = pseudo.style.getPropertyValue('--pseudoBefore--content');
+    if (!content) content = pseudo.textContent || "";
+    content = content.replace(/["']/g, "").trim();
+    const persianContent = toPersianDigits(content);
+    pseudo.style.removeProperty("--pseudoBefore--content");
+    pseudo.textContent = persianContent;
+    pseudo.style.direction = 'rtl';
+    pseudo.style.textAlign = 'right';
+  }
+}
+
+// Apply RTL and number conversion for numbered lists
+function applyRTLToNumberedLists(): void {
+  document.querySelectorAll(".notion-selectable.notion-numbered_list-block").forEach((block: Element) => {
+    if (containsPersianArabic(block.textContent || "")) {
+      updateNumberedListBlock(block);
+      (block as HTMLElement).style.direction = 'rtl';
+      (block as HTMLElement).style.textAlign = 'right';
+    }
+  });
+}
+
+// Apply RTL adjustments for quote blocks
+function applyRTLToQuotes(): void {
+  document.querySelectorAll(".notion-quote-block").forEach((block: Element) => {
+    if (containsPersianArabic(block.textContent || "")) {
+      const bq = block.querySelector("blockquote") as HTMLElement | null;
+      if (bq) {
+        const inner = bq.querySelector("div[style*='border-left']") as HTMLElement | null;
+        if (inner) {
+          const computed = window.getComputedStyle(inner);
+          const originalPaddingLeft = computed.paddingLeft;
+          const originalPaddingRight = computed.paddingRight;
+          inner.style.borderLeft = "none";
+          inner.style.borderRight = "3px solid currentcolor";
+          inner.style.paddingLeft = originalPaddingRight;
+          inner.style.paddingRight = originalPaddingLeft;
+        }
+        bq.style.direction = "rtl";
+        bq.style.textAlign = "right";
+      }
+    }
+  });
+}
+
+// Apply RTL adjustments for toggle blocks, including moving the toggle button to the right
+function applyRTLToToggleBlocks(): void {
+  document.querySelectorAll(".notion-selectable.notion-toggle-block").forEach((block: Element) => {
+    if (containsPersianArabic(block.textContent || "")) {
+      const toggleBlock = block as HTMLElement;
+      // toggleBlock.style.direction = "rtl";
+      toggleBlock.style.textAlign = "right";
+      // Ensure the container reverses the order with important flag to override inline styles
+      const flexContainer = toggleBlock.firstElementChild as HTMLElement | null;
+      if (flexContainer) {
+        flexContainer.style.setProperty("flex-direction", "row-reverse", "important");
+      }
+    }
+  });
+}
+
+// Additional RTL logic for blocks
+function applyAdditionalRTLLogic(): void {
+  document.querySelectorAll(".notion-selectable.notion-bulleted_list-block").forEach((block: Element) => {
+    (block as HTMLElement).setAttribute("dir", "rtl");
+  });
+  document.querySelectorAll(".notion-table-block").forEach((block: Element) => {
+    if (Array.from(block.querySelectorAll("*")).some(el => containsPersianArabic(el.textContent || ""))) {
+      (block as HTMLElement).setAttribute("dir", "rtl");
+    }
+  });
+  document.querySelectorAll(".notion-to_do-block").forEach((block: Element) => {
+    if (Array.from(block.querySelectorAll("*")).some(el => containsPersianArabic(el.textContent || ""))) {
+      (block as HTMLElement).setAttribute("dir", "rtl");
+    }
+  });
+}
+
+// New parts RTL logic for headers, table cells, header cells, etc.
+function applyRTLToNewParts(): void {
+  const selectors = ".notion-body h1, .notion-body h2, .notion-body h3, .notion-body h4, .notion-body h5, .notion-body h6, " +
+    ".notion-table-view th, .notion-table-view td, .notion-collection_view-block div[data-content-editable-void='true'] > div:nth-child(2), " +
+    ".notion-table-view-header-cell, .notion-table-view-cell";
+  document.querySelectorAll(selectors).forEach((el: Element) => {
+    if (containsPersianArabic(el.textContent || "")) {
+      const element = el as HTMLElement;
+      element.style.direction = "rtl";
+      element.style.textAlign = "right";
+      element.style.fontFamily = `"${currentFont}", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif`;
+    }
+  });
+}
+
+// Global font style for main Notion elements
+function applyGlobalFontStyles(): void {
+  const selectors = [
+    ".notion-page-content",
+    ".notion-table-view",
+    ".notion-board-view",
+    ".notion-gallery-view",
+    ".notion-page-block",
+    ".notion-topbar",
+    ".notion-body",
+    ".notion-selectable",
+    ".notion-collection_view-block",
+    ".notion-frame",
+    ".notion-collection-item"
+  ].join(", ");
+  document.querySelectorAll(selectors).forEach((el: Element) => {
+    (el as HTMLElement).style.setProperty("font-family", `"${currentFont}", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif`, "important");
+  });
+}
+
+// Setup the observer
+function setupObserver(): void {
+  if (observer) return;
+  observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList') {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) processSubtree(node);
+        });
+      } else if (mutation.type === 'characterData') {
+        processTextNode(mutation.target as Text);
+      }
+    }
+    applyAdditionalRTLLogic();
+    applyGlobalFontStyles();
+    applyRTLToNewParts();
+    applyRTLToNumberedLists();
+    applyRTLToQuotes();
+    applyRTLToToggleBlocks();
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  processSubtree(document.body);
+  applyAdditionalRTLLogic();
+  applyGlobalFontStyles();
+  applyRTLToNewParts();
+  applyRTLToNumberedLists();
+  applyRTLToQuotes();
+  applyRTLToToggleBlocks();
+}
+
+// Cleanup the observer
+function cleanupObserver(): void {
+  if (observer) { observer.disconnect(); observer = null; }
+}
+
+// Save the selected font to storage
+export function saveSelectedFont(fontFamily: string): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ selectedFont: fontFamily }, () => resolve());
+  });
+}
+
+// Load the selected font from storage
+export function loadSelectedFont(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['selectedFont'], (result) => resolve(result.selectedFont || 'Vazirmatn'));
+  });
+}
+
+// Set the current font
+export function setCurrentFont(fontFamily: string): void {
+  currentFont = fontFamily;
+  if (fontStyleElement) {
+    document.querySelectorAll('.notranslate[data-content-editable-leaf="true"]').forEach((el: Element) => {
+      const element = el as HTMLElement;
+      if (containsPersianArabic(element.textContent || '')) {
+        element.style.fontFamily = `"${currentFont}", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif`;
+      }
+    });
+  }
+  applyGlobalFontStyles();
+  applyRTLToNewParts();
+  applyRTLToNumberedLists();
+  applyRTLToQuotes();
+  applyRTLToToggleBlocks();
+}
+
+// Inject or remove font styles and observer
+export function injectFonts(enabled: boolean): void {
+  if (enabled) {
+    loadSelectedFont().then((fontFamily) => {
+      currentFont = fontFamily;
+      if (!fontStyleElement) {
+        fontStyleElement = document.createElement('style');
+        fontStyleElement.textContent = ALL_FONTS_CSS;
+        document.head.appendChild(fontStyleElement);
+      }
+      setupObserver();
+    });
+  } else {
+    if (fontStyleElement) { fontStyleElement.remove(); fontStyleElement = null; }
+    document.querySelectorAll('.notranslate[data-content-editable-leaf="true"]').forEach((el: Element) => {
+      const element = el as HTMLElement;
+      element.style.fontFamily = '';
+      element.style.direction = '';
+      element.style.textAlign = '';
+    });
+    cleanupObserver();
+  }
+}
+
++++++
+convertText.ts
+import { parseGregorian, formatJalali } from "./dateUtils";
+
+export function convertText(persianInput: boolean) {
+  document.querySelectorAll<HTMLElement>(".notion-reminder").forEach(el => {
+    const current = el.innerText.trim();
+    // Split the text into date and time parts.
+    const match = current.match(/^(.+?)(\s+\d{1,2}:\d{2}\s*(AM|PM))?$/i);
+    if (!match) return;
+    const datePart = match[1];
+    const timePart = match[2] || "";
+    let original = el.dataset.originalDate;
+    if (!original) {
+      original = current;
+      el.dataset.originalDate = original;
+    }
+    if (persianInput) {
+      const d = parseGregorian(datePart);
+      if (d && !isNaN(d.getTime())) {
+        const jalaliDate = formatJalali(d);
+        const newText = jalaliDate + timePart;
+        if (newText !== current) {
+          console.log("mtlog: Converting text block date", original, "to", newText);
+          el.innerText = newText;
+          el.title = original;
+          el.dataset.converted = "true";
+        }
+      }
+    } else {
+      if (el.dataset.converted === "true") {
+        console.log("mtlog: Reverting text block date", original);
+        el.innerText = original;
+        el.title = "";
+        delete el.dataset.converted;
+      }
+    }
+  });
+}
+
++++++
+background.ts
+/* background.ts */
+function applySettingsToTab(tabId: number) {
+  chrome.storage.sync.get(
+    ["persianInput", "fontInjectionEnabled", "selectedFont"],
+    (data) => {
+      chrome.tabs.sendMessage(tabId, { type: "applySettings", data });
+    }
+  );
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url && tab.url.includes("notion.so") && changeInfo.status === 'complete') {
+    applySettingsToTab(tabId);
+  } else {
+    chrome.action.disable(tabId);
+  }
+});
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (tab && tab.url && tab.url.includes("notion.so") && tab.id !== undefined) {
+      applySettingsToTab(tab.id);
+    }
+  });
+});
+
++++++
+state.ts
+import { persianToggle, fontToggle, fontSelectorContainer, fontSelector, updateFontAuthor } from "./ui";
+import { checkForErrors } from "./events";
+
+export function loadState() {
+  chrome.storage.sync.get(["persianInput", "fontInjectionEnabled", "selectedFont"], data => {
+    persianToggle.checked = !!data.persianInput;
+    fontToggle.checked = !!data.fontInjectionEnabled;
+    if (data.fontInjectionEnabled) {
+      fontSelectorContainer.classList.add('visible');
+    } else {
+      fontSelectorContainer.classList.remove('visible');
+    }
+    if (data.selectedFont) {
+      fontSelector.value = data.selectedFont;
+    //   updateFontAuthor();
+    }
+    if (data.persianInput) {
+      checkForErrors();
+    }
+  });
+}
+
++++++
+popup.html
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>نوشن فارسی</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Badge -->
+    <div class="badge-experimental">آزمایشی</div>
+
+    <!-- Header -->
+    <div class="logo-container">
+      <img src="assets/icons/notionfarsi_logo.svg" alt="Notion Farsi Logo" class="logo">
+      <span class="header-text">نوشن فارسی</span>
+    </div>
+
+    <!-- Toggle 1 -->
+    <div class="toggle-row" style="top:68px;">
+      <label class="switch">
+        <input type="checkbox" id="persian-toggle" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="persian-toggle" class="toggle-label">تاریخ شمسی</label>
+      <div class="icon-wrap">
+        <img src="assets/icons/calendar_icon.svg" alt="Calendar Icon">
+      </div>
+    </div>
+
+    <!-- Toggle 2 -->
+    <div class="toggle-row" style="top:109px;">
+      <label class="switch">
+        <input type="checkbox" id="font-toggle" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="font-toggle" class="toggle-label">فونت فارسی</label>
+      <div class="icon-wrap">
+        <img src="assets/icons/farsi_icon.svg" alt="Farsi Icon">
+      </div>
+    </div>
+
+    <!-- Font Selector -->
+    
+    <div id="font-selector-container" class="font-selector-container">
+     
+      <select id="font-selector"></select>
+      
+    </div>
+    <div id="error-message"></div>
+
+    <!-- Separator -->
+    <hr class="separator">
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://github.com/truthofmatthew" target="_blank" class="social github">
+        <img src="assets/icons/GitHub_Icon.svg" alt="GitHub">
+      </a>
+      <a href="https://www.linkedin.com/in/truthofmatthew/" target="_blank" class="social linkedin">
+        <img src="assets/icons/Linkedin_Icon.svg" alt="LinkedIn">
+      </a>
+      <div class="avatar">
+        <img src="assets/icons/boy_icon.svg" alt="Boy Icon">
+      </div>
+      <span class="footer-name">Matthew Truth</span>
+    </div>
+    
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
+
++++++
+popup.ts
+import { initFontSelector } from "./ui";
+import { initListeners } from "./events";
+import { loadState } from "./state";
+
+initFontSelector();
+loadState();
+initListeners();
+
++++++
+events.ts
+import { persianToggle, fontToggle, resetButton, errorMessageEl, fontSelector, fontSelectorContainer, updateFontAuthor, showErrorMessage } from "./ui";
+import { saveSelectedFont } from "../fontInjection";
+
+let altKeyPressed = false;
+
+export function initListeners() {
+  persianToggle.addEventListener("change", () => {
+    const enabled = persianToggle.checked;
+    chrome.storage.sync.set({ persianInput: enabled });
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { persianInput: enabled });
+      }
+    });
+    if (!enabled) {
+      errorMessageEl.style.display = 'none';
+    } else {
+      setTimeout(checkForErrors, 1000);
+    }
+  });
+
+  fontToggle.addEventListener('change', () => {
+    const enabled = fontToggle.checked;
+    chrome.storage.sync.set({ fontInjectionEnabled: enabled });
+    if (enabled) {
+      fontSelectorContainer.classList.add('visible');
+    } else {
+      fontSelectorContainer.classList.remove('visible');
+    }
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { fontInjectionEnabled: enabled });
+      }
+    });
+  });
+
+  fontSelector.addEventListener('change', () => {
+    const selectedFont = fontSelector.value;
+    // updateFontAuthor();
+    saveSelectedFont(selectedFont).then(() => {
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, { selectedFont });
+        }
+      });
+    });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Alt') {
+      altKeyPressed = true;
+      resetButton.textContent = "Force Reload Page";
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt') {
+      altKeyPressed = false;
+      resetButton.textContent = "Reset All Dates";
+    }
+  });
+
+//   resetButton.addEventListener("click", () => {
+//     const forceReload = altKeyPressed;
+//     resetButton.disabled = true;
+//     errorMessageEl.style.display = 'none';
+//     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+//       if (tabs[0]?.id) {
+//         chrome.tabs.sendMessage(tabs[0].id, { 
+//           refreshConversion: true,
+//           forceReload
+//         }, () => {
+//           if (chrome.runtime.lastError) {
+//             resetButton.disabled = false;
+//           }
+//           if (forceReload) {
+//             window.close();
+//           }
+//         });
+//       } else {
+//         resetButton.disabled = false;
+//       }
+//     });
+//   });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.resetComplete) {
+      if (!message.reloading) {
+        resetButton.disabled = false;
+        setTimeout(checkForErrors, 500);
+      }
+    }
+    if (message.errorCountChanged !== undefined) {
+      if (message.errorCount > 0) {
+        showErrorMessage(message.errorCount);
+      } else {
+        errorMessageEl.style.display = 'none';
+      }
+    }
+  });
+}
+
+export function checkForErrors() {
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    if (tabs[0]?.id) {
+      chrome.tabs.sendMessage(tabs[0].id, { checkErrors: true }, (response) => {
+        if (chrome.runtime.lastError) return;
+        if (response && response.errorCount > 0) {
+          showErrorMessage(response.errorCount);
+        } else {
+          errorMessageEl.style.display = 'none';
+        }
+      });
+    }
+  });
+}
+
++++++
+ui.ts
+import { defaultFonts } from "../fontInjection";
+
+export const persianToggle = document.getElementById('persian-toggle') as HTMLInputElement;
+export const fontToggle = document.getElementById('font-toggle') as HTMLInputElement;
+export const resetButton = document.getElementById('reset-button') as HTMLButtonElement;
+export const errorMessageEl = document.getElementById('error-message') as HTMLDivElement;
+export const fontSelectorContainer = document.getElementById('font-selector-container') as HTMLDivElement;
+export const fontSelector = document.getElementById('font-selector') as HTMLSelectElement;
+export const fontAuthor = document.getElementById('font-author') as HTMLDivElement;
+export const statusEl = document.getElementById('status') as HTMLDivElement; // if used
+
+export function initFontSelector() {
+  fontSelector.innerHTML = '';
+  defaultFonts.forEach(font => {
+    const option = document.createElement('option');
+    option.value = font.en_name;
+    option.textContent = font.fa_name;
+    option.dataset.author = font.creator;
+    fontSelector.appendChild(option);
+  });
+//   updateFontAuthor();
+}
+
+export function updateFontAuthor() {
+  const selectedOption = fontSelector.options[fontSelector.selectedIndex];
+  fontAuthor.textContent = selectedOption?.dataset.author ? `By: ${selectedOption.dataset.author}` : '';
+}
+
+export function updateStatus(message: string) {
+  if(statusEl) statusEl.textContent = message;
+}
+
+export function showErrorMessage(count: number) {
+  errorMessageEl.style.display = 'block';
+  errorMessageEl.innerHTML = `
+    <p>⚠️ ${count} conversion errors detected!</p>
+    <p>Some dates might be displaying incorrectly. Try the "Reset All Dates" button to fix.</p>
+  `;
+}
+
++++++
+popup.css
+.container {
+  position: relative;
+  width: 300px;
+  height: 273px;
+  background: #fffdfa;
+  margin: 0 auto;
+  font-family: 'Vazirmatn', sans-serif;
+}
+
+.badge-experimental {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  width: 34px;
+  height: 15px;
+  background: #ea4e43;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 15px;
+  border-radius: 4px;
+}
+
+.logo-container {
+  position: absolute;
+  top: 15px;
+  left: 183px;
+}
+
+.logo {
+  position: absolute;
+  top: 0;
+  left: 74px;
+  width: 23px;
+  height: 22px;
+}
+
+.header-text {
+  font-size: 12.5px;
+  font-weight: bold;
+  color: #050505;
+  line-height: 19px;
+}
+
+.toggle-row {
+  position: absolute;
+  left: 22px;
+  width: 256px;
+  height: 26px;
+}
+
+/* Switch style (from old code) */
+.switch {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 34px;
+  height: 18px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 20px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #fff;
+  transition: .4s;
+  border-radius: 50%;
+}
+.switch input:checked + .slider {
+  background-color: #2F80ED;
+}
+.switch input:checked + .slider:before {
+  transform: translateX(14px);
+}
+
+/* Toggle label */
+.toggle-label {
+  position: absolute;
+  top: 0;
+  right: 30px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.icon-wrap {
+  position: absolute;
+  top: 3px;
+  
+  width: 40px;
+  height: 21px;
+}
+
+.icon-wrap img {
+  position: absolute;
+  top: 0;
+  
+  width: 20px;
+  height: 20px;
+}
+
+
+
+.separator {
+  position: absolute;
+  top: 225px;
+  left: 10px;
+  width: 280px;
+  border: none;
+  height: 1px;
+  background: #ccc;
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 34px;
+}
+
+.social {
+  position: absolute;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 5px;
+}
+
+.github {
+  right: 48px;
+}
+
+.linkedin {
+  right: 12px;
+}
+
+.social img {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  top: 5px;
+  left: 5px;
+}
+
+.avatar {
+  position: absolute;
+  top: 5px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+}
+
+.footer-name {
+  position: absolute;
+  top: 12px;
+  left: 42px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #05050599;
+}
+
+/* Font selector (from old code) */
+.font-selector-container {
+  position: absolute;
+  top: 152px;
+  left: 18px;
+  
+  
+  display: flex;
+  align-items: center;
+  
+  font-size: 12px;
+  
+
+}
+
+
+  .font-selector-container.visible {
+    
+    display: block;
+  }
+  .font-selector-container select {
+    font-family: 'Vazirmatn', sans-serif;
+    width: 266px;
+    height: 36px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 16px;
+    
+  }
+  .font-selector-container .font-author {
+    font-size: 12px;
+    color: #777;
+    margin-top: 4px;
+    font-style: italic;
+  }
+  
+
++++++
+content.ts
+import { convertTable, resetAllConversions, isCurrentlyMakingChanges, wasRecentlyProcessed, getErrorCount } from "../convertTable";
+import { convertDateMentions, resetDateMentions } from "../convertNotif";
+import { injectFonts, setCurrentFont } from "../fontInjection";
+
+// Track if Persian mode is enabled
+let persianInput = false;
+
+// Track if font injection is enabled
+let fontInjectionEnabled = false;
+
+// Flag to prevent multiple simultaneous conversions
+let isProcessingDate = false;
+
+// Debounce timer for mutation events
+let debounceTimer: number | null = null;
+
+// Initialize from storage
+chrome.storage.sync.get(["persianInput", "fontInjectionEnabled"], d => {
+  console.log("mtlog: Initial state loaded", d);
+  persianInput = !!d.persianInput;
+  fontInjectionEnabled = !!d.fontInjectionEnabled;
+  
+  // Initial conversion if enabled
+  if (persianInput) {
+    setTimeout(() => {
+      convertDates();
+    }, 500); // Short delay to let Notion render fully
+  }
+  
+  // Apply font injection if enabled
+  injectFonts(fontInjectionEnabled);
+});
+
+
+
+// Message handler for popup
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
+  if (msg.type === "applySettings" && msg.data) {
+    persianInput = !!msg.data.persianInput;
+    fontInjectionEnabled = !!msg.data.fontInjectionEnabled;
+    if (msg.data.selectedFont) setCurrentFont(msg.data.selectedFont);
+    if (persianInput) convertDates();
+    injectFonts(fontInjectionEnabled);
+    return;
+  }
+
+  console.log("mtlog: Received message", msg);
+  
+  // Handle enable/disable toggle
+  if (msg.persianInput !== undefined) {
+    persianInput = msg.persianInput;
+    console.log("mtlog: Persian input set to", persianInput);
+    
+    // Process immediately
+    convertDates();
+  }
+  
+  // Handle font injection toggle
+  if (msg.fontInjectionEnabled !== undefined) {
+    fontInjectionEnabled = msg.fontInjectionEnabled;
+    console.log("mtlog: Font injection set to", fontInjectionEnabled);
+    
+    // Apply font injection
+    injectFonts(fontInjectionEnabled);
+  }
+  
+  // Handle font selection change
+  if (msg.selectedFont) {
+    console.log("mtlog: Font selection changed to", msg.selectedFont);
+    
+    // Update the current font
+    setCurrentFont(msg.selectedFont);
+  }
+  
+  // Handle error check request
+  if (msg.checkErrors) {
+    const errorCount = getErrorCount();
+    console.log("mtlog: Returning error count", errorCount);
+    sendResponse({ errorCount });
+    return true; // Keep channel open
+  }
+  
+  // Handle reset request
+  if (msg.refreshConversion) {
+    console.log("mtlog: Reset requested");
+    
+    // Reset all dates
+    const resetCount = resetAllConversions();
+    
+    // Reset all date mentions
+    const resetMentionCount = resetDateMentions();
+    
+    const totalResetCount = resetCount + resetMentionCount;
+    
+    // Handle page reload if requested
+    if (msg.forceReload) {
+      chrome.runtime.sendMessage({ 
+        resetComplete: true, 
+        count: totalResetCount,
+        reloading: true
+      });
+      
+      // Reload the page
+      window.location.reload();
+      return true;
+    }
+    
+    // Wait a moment and report completion
+    setTimeout(() => {
+      if (persianInput) {
+        convertDates();
+      }
+      
+      chrome.runtime.sendMessage({ 
+        resetComplete: true, 
+        count: totalResetCount
+      });
+    }, 500);
+    
+    return true; // Keep channel open
+  }
+  
+  return false;
+});
+
+// Main conversion function
+function convertDates() {
+  if (isProcessingDate) {
+    console.log("mtlog: Already processing, skipping");
+    return;
+  }
+  
+  isProcessingDate = true;
+  
+  try {
+    console.log("mtlog: Converting dates, mode:", persianInput ? "Persian" : "Gregorian");
+    
+    // Step 1: Convert table property dates
+    const tableCount = convertTable(persianInput);
+    
+    // Step 2: Convert date mentions/reminders
+    const mentionCount = convertDateMentions(persianInput);
+    
+    const totalCount = tableCount + mentionCount;
+    
+    // Report errors if any
+    const errorCount = getErrorCount();
+    if (errorCount > 0) {
+      chrome.runtime.sendMessage({ 
+        errorCountChanged: true,
+        errorCount
+      });
+    }
+    
+    console.log(`mtlog: Processed ${totalCount} dates (${tableCount} table dates, ${mentionCount} mentions)`);
+  } finally {
+    isProcessingDate = false;
+  }
+}
+
+// Listen for user interactions that might change dates
+function setupEventListeners() {
+  // Date picker interactions
+  document.addEventListener("click", (e) => {
+    if (!persianInput) return;
+    
+    const target = e.target as HTMLElement;
+    
+    // Handle clicks on date picker elements
+    if (
+      target.matches("button[name='day']") ||
+      target.closest("button[name='previous-month']") || 
+      target.closest("button[name='next-month']") ||
+      (target.closest("[role='button']") && 
+       (target.textContent?.includes("Date format") || target.textContent?.includes("Clear")))
+    ) {
+      console.log("mtlog: Date picker interaction detected");
+      
+      // Delay to let Notion update the date
+      setTimeout(convertDates, 300);
+    }
+    
+    // Handle date mention creation (when clicking @ and selecting 'Date')
+    if (target.closest('.notion-selectable') && 
+        (target.textContent?.includes('@Date') || 
+         target.textContent?.includes('@Reminder'))) {
+      console.log("mtlog: Date mention interaction detected");
+      
+      // Wait a bit longer for Notion to create the date mention
+      setTimeout(convertDates, 800);
+    }
+  });
+  
+  // Date field input events
+  document.addEventListener("input", (e) => {
+    if (!persianInput) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-testid='property-value']") || 
+        target.tagName === "INPUT" && target.closest(".rdp")) {
+      console.log("mtlog: Date field input detected");
+      
+      // Debounce multiple rapid inputs
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(convertDates, 300);
+    }
+  });
+}
+
+// Setup MutationObserver to detect date changes in the DOM
+function setupMutationObserver() {
+  const observer = new MutationObserver((mutations) => {
+    // Skip if disabled, already making changes, or just processed
+    if (!persianInput || isCurrentlyMakingChanges() || wasRecentlyProcessed(500)) {
+      return;
+    }
+    
+    // Check if any mutations are related to dates
+    const hasDateChanges = mutations.some(mutation => {
+      // Text changes
+      if (mutation.type === 'characterData' && 
+          mutation.target.nodeType === Node.TEXT_NODE && 
+          mutation.target.textContent) {
+        return true;
+      }
+      
+      // Element changes in date fields
+      if (mutation.type === 'childList' && 
+          mutation.target instanceof HTMLElement && 
+          (mutation.target.closest("[data-testid='property-value']") || 
+           mutation.target.closest(".notion-date") ||
+           mutation.target.closest(".notion-reminder") ||
+           mutation.target.closest(".rdp"))) {
+        return true;
+      }
+      
+      return false;
+    });
+    
+    if (hasDateChanges) {
+      console.log("mtlog: Date changes detected by observer");
+      
+      // Debounce to avoid repeated conversions
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(convertDates, 300);
+    }
+  });
+  
+  // Start observing document
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+}
+
+// Setup error reporting to popup
+function setupErrorReporting() {
+  setInterval(() => {
+    if (!persianInput) return;
+    
+    const errorCount = getErrorCount();
+    if (errorCount > 0) {
+      chrome.runtime.sendMessage({ 
+        errorCountChanged: true,
+        errorCount
+      }, () => {
+        // Ignore errors - popup might not be open
+      });
+    }
+  }, 5000);
+}
+
+// Initialize all event listeners and observers
+setupEventListeners();
+setupMutationObserver();
+setupErrorReporting();
+
+
++++++

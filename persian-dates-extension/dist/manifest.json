@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Persian Dates for Notion",
+  "version": "1.0",
+  "description": "Convert Gregorian dates to Persian dates in Notion",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.notion.so/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.notion.so/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/fonts/vazir/Vazirmatn[wght].woff2",
+        "assets/fonts/sahel/Sahel-VF.woff2",
+        "assets/fonts/parastoo/Parastoo.woff2",
+        "assets/fonts/parastoo/Parastoo-Bold.woff2",
+        "assets/icons/notionfarsi_logo.svg",
+        "assets/icons/calendar_icon.svg",
+        "assets/icons/farsi_icon.svg",
+        "assets/icons/frame.svg",
+        "assets/icons/GitHub_Icon.svg",
+        "assets/icons/Linkedin_Icon.svg",
+        "assets/icons/boy_icon.svg",
+        "assets/icons/arrow_down.svg"
+        
+      ],
+      "matches": ["https://*.notion.so/*"]
+    }
+  ]
+}
