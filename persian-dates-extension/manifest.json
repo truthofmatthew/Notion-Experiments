@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Persian Dates for Notion",
-  "version": "1.0",
+  "name": "Persian Tools for Notion",
+  "version": "0.1.0",
   "description": "Convert Gregorian dates to Persian dates in Notion",
   "permissions": [
     "storage",
@@ -44,10 +44,12 @@
         "assets/icons/GitHub_Icon.svg",
         "assets/icons/Linkedin_Icon.svg",
         "assets/icons/boy_icon.svg",
-        "assets/icons/arrow_down.svg"
-        
+        "assets/icons/arrow_down.svg",
+        "assets/icons/gear.svg"
       ],
       "matches": ["https://*.notion.so/*"]
     }
   ]
+  
+
 }

@@ -1,24 +1,23 @@
-import { defaultFonts } from "../fontInjection";
+import { DEFAULT_FONTS, UI_ELEMENTS } from "../constant";
 
-export const persianToggle = document.getElementById('persian-toggle') as HTMLInputElement;
-export const fontToggle = document.getElementById('font-toggle') as HTMLInputElement;
-export const resetButton = document.getElementById('reset-button') as HTMLButtonElement;
-export const errorMessageEl = document.getElementById('error-message') as HTMLDivElement;
-export const fontSelectorContainer = document.getElementById('font-selector-container') as HTMLDivElement;
-export const fontSelector = document.getElementById('font-selector') as HTMLSelectElement;
-export const fontAuthor = document.getElementById('font-author') as HTMLDivElement;
-export const statusEl = document.getElementById('status') as HTMLDivElement; // if used
+export const persianToggle = document.getElementById(UI_ELEMENTS.PERSIAN_TOGGLE) as HTMLInputElement;
+export const fontToggle = document.getElementById(UI_ELEMENTS.FONT_TOGGLE) as HTMLInputElement;
+export const resetButton = document.getElementById(UI_ELEMENTS.RESET_BUTTON) as HTMLButtonElement;
+export const errorMessageEl = document.getElementById(UI_ELEMENTS.ERROR_MESSAGE) as HTMLDivElement;
+export const fontSelectorContainer = document.getElementById(UI_ELEMENTS.FONT_SELECTOR_CONTAINER) as HTMLDivElement;
+export const fontSelector = document.getElementById(UI_ELEMENTS.FONT_SELECTOR) as HTMLSelectElement;
+export const fontAuthor = document.getElementById(UI_ELEMENTS.FONT_AUTHOR) as HTMLDivElement;
+export const statusEl = document.getElementById(UI_ELEMENTS.STATUS) as HTMLDivElement;
 
 export function initFontSelector() {
   fontSelector.innerHTML = '';
-  defaultFonts.forEach(font => {
+  DEFAULT_FONTS.forEach(font => {
     const option = document.createElement('option');
     option.value = font.en_name;
     option.textContent = font.fa_name;
     option.dataset.author = font.creator;
     fontSelector.appendChild(option);
   });
-//   updateFontAuthor();
 }
 
 export function updateFontAuthor() {
@@ -27,7 +26,7 @@ export function updateFontAuthor() {
 }
 
 export function updateStatus(message: string) {
-  if(statusEl) statusEl.textContent = message;
+  if (statusEl) statusEl.textContent = message;
 }
 
 export function showErrorMessage(count: number) {

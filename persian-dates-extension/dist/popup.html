@@ -7,68 +7,81 @@
 </head>
 <body>
   <div class="container">
-    <!-- Badge -->
-    <div class="badge-experimental">آزمایشی</div>
 
-    <!-- Header -->
-    <div class="logo-container">
-      <img src="assets/icons/notionfarsi_logo.svg" alt="Notion Farsi Logo" class="logo">
-      <span class="header-text">نوشن فارسی</span>
-    </div>
-
-    <!-- Toggle 1 -->
-    <div class="toggle-row" style="top:68px;">
-      <label class="switch">
-        <input type="checkbox" id="persian-toggle" checked>
-        <span class="slider"></span>
-      </label>
-      <label for="persian-toggle" class="toggle-label">تاریخ شمسی</label>
-      <div class="icon-wrap">
-        <img src="assets/icons/calendar_icon.svg" alt="Calendar Icon">
+    <!-- settings -->
+    <div id="settings-page" style="display:none;">
+      <h3>تنظیمات افزونه</h3>
+      <div class="toggle-row" style="position: relative; margin-bottom: 15px;">
+        <label class="switch">
+          <input type="checkbox" id="persian-numbers-toggle">
+          <span class="slider"></span>
+        </label>
+        <label for="persian-numbers-toggle" class="toggle-label">اعداد فارسی در تاریخ‌ها</label>
       </div>
-    </div>
-
-    <!-- Toggle 2 -->
-    <div class="toggle-row" style="top:109px;">
-      <label class="switch">
-        <input type="checkbox" id="font-toggle" checked>
-        <span class="slider"></span>
-      </label>
-      <label for="font-toggle" class="toggle-label">فونت فارسی</label>
-      <div class="icon-wrap">
-        <img src="assets/icons/farsi_icon.svg" alt="Farsi Icon">
-      </div>
-    </div>
-
-    <!-- Font Selector -->
-    
-    <div id="font-selector-container" class="font-selector-container">
-     
-      <select id="font-selector"></select>
-      
-    </div>
-    <div id="call-message">اگه چیزی خراب بود، یه خبر بهم بده  🐞</div>
-
-
-
-    <!-- Separator -->
-    <hr class="separator">
-
-    <!-- Footer -->
-    <div class="footer">
-      <a href="https://github.com/truthofmatthew" target="_blank" class="social github">
-        <img src="assets/icons/GitHub_Icon.svg" alt="GitHub">
-      </a>
-      <a href="https://www.linkedin.com/in/truthofmatthew/" target="_blank" class="social linkedin">
-        <img src="assets/icons/Linkedin_Icon.svg" alt="LinkedIn">
-      </a>
-      <div class="avatar">
-        <img src="assets/icons/boy_icon.svg" alt="Boy Icon">
-      </div>
-      <span class="footer-name">Matthew Truth</span>
+      <button id="settings-back" class="blue-btn">بازگشت</button>
     </div>
     
+
+    <!-- main -->
+    <div id="main-page">
+
+      <div class="badge-experimental">آزمایشی</div>
+      <div class="logo-container">
+        <img src="assets/icons/notionfarsi_logo.svg" alt="Notion Farsi Logo" class="logo">
+        <span class="header-text">نوشن فارسی</span>
+      </div>
+
+      <div class="toggle-row" style="top:68px;">
+        <label class="switch">
+          <input type="checkbox" id="persian-toggle" checked>
+          <span class="slider"></span>
+        </label>
+        <label for="persian-toggle" class="toggle-label">تاریخ شمسی</label>
+        <div class="icon-wrap">
+          <img src="assets/icons/calendar_icon.svg" alt="Calendar Icon">
+        </div>
+      </div>
+
+      <div class="toggle-row" style="top:109px;">
+        <label class="switch">
+          <input type="checkbox" id="font-toggle" checked>
+          <span class="slider"></span>
+        </label>
+        <label for="font-toggle" class="toggle-label">فونت فارسی</label>
+        <div class="icon-wrap">
+          <img src="assets/icons/farsi_icon.svg" alt="Farsi Icon">
+        </div>
+      </div>
+
+      <div id="font-selector-container" class="font-selector-container">
+        <select id="font-selector"></select>
+      </div>
+
+      <div id="call-message">اگه چیزی خراب بود، یه خبر بهم بده 🐞</div>
+      <hr class="separator">
+
+      <div class="footer">
+        <a href="https://github.com/truthofmatthew" target="_blank" class="social github">
+          <img src="assets/icons/GitHub_Icon.svg" alt="GitHub">
+        </a>
+        <a href="https://www.linkedin.com/in/truthofmatthew/" target="_blank" class="social linkedin">
+          <img src="assets/icons/Linkedin_Icon.svg" alt="LinkedIn">
+        </a>
+        <a href="#" id="settings-gear" class="social gear" title="تنظیمات">
+          
+          <svg fill="currentColor" width="24px" height="24px" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg"><path d="M25 34c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9zm0-16c-3.9 0-7 3.1-7 7s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7z"/><path d="M27.7 44h-5.4l-1.5-4.6c-1-.3-2-.7-2.9-1.2l-4.4 2.2-3.8-3.8 2.2-4.4c-.5-.9-.9-1.9-1.2-2.9L6 27.7v-5.4l4.6-1.5c.3-1 .7-2 1.2-2.9l-2.2-4.4 3.8-3.8 4.4 2.2c.9-.5 1.9-.9 2.9-1.2L22.3 6h5.4l1.5 4.6c1 .3 2 .7 2.9 1.2l4.4-2.2 3.8 3.8-2.2 4.4c.5.9.9 1.9 1.2 2.9l4.6 1.5v5.4l-4.6 1.5c-.3 1-.7 2-1.2 2.9l2.2 4.4-3.8 3.8-4.4-2.2c-.9.5-1.9.9-2.9 1.2L27.7 44zm-4-2h2.6l1.4-4.3.5-.1c1.2-.3 2.3-.8 3.4-1.4l.5-.3 4 2 1.8-1.8-2-4 .3-.5c.6-1 1.1-2.2 1.4-3.4l.1-.5 4.3-1.4v-2.6l-4.3-1.4-.1-.5c-.3-1.2-.8-2.3-1.4-3.4l-.3-.5 2-4-1.8-1.8-4 2-.5-.3c-1.1-.6-2.2-1.1-3.4-1.4l-.5-.1L26.3 8h-2.6l-1.4 4.3-.5.1c-1.2.3-2.3.8-3.4 1.4l-.5.3-4-2-1.8 1.8 2 4-.3.5c-.6 1-1.1 2.2-1.4 3.4l-.1.5L8 23.7v2.6l4.3 1.4.1.5c.3 1.2.8 2.3 1.4 3.4l.3.5-2 4 1.8 1.8 4-2 .5.3c1.1.6 2.2 1.1 3.4 1.4l.5.1 1.4 4.3z"/></svg>
+
+        </a>
+        <div class="avatar">
+          <img src="assets/icons/boy_icon.svg" alt="Boy Icon">
+        </div>
+        <span class="footer-name">Matthew Truth</span>
+      </div>
+
+    </div>
+
   </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

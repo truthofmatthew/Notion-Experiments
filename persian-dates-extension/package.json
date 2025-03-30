@@ -1,6 +1,6 @@
 {
-  "name": "notion-persian-dates",
-  "version": "1.0.0",
+  "name": "notion-persian-tools",
+  "version": "0.1.0",
   "description": "Convert Gregorian dates to Persian dates in Notion",
   "main": "dist/content.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "clean": "rimraf dist"
   },
   "keywords": [],
-  "author": "",
+  "author": "Matthew Truth",
   "license": "ISC",
   "devDependencies": {
     "@types/chrome": "^0.0.260",
@@ -23,6 +23,8 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "jalaali-js": "^1.1.1"
+    "date-fns-jalali": "^4.1.0-0",
+    "dayjs": "^1.11.13",
+    "jalaali-js": "^1.2.8"
   }
 }

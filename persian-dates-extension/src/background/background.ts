@@ -1,9 +1,10 @@
-/* background.ts */
+import { STORAGE_KEYS, MESSAGE_TYPES, NOTION_URL_PATTERN } from "../constant";
+
 function applySettingsToTab(tabId: number) {
   chrome.storage.sync.get(
-    ["persianInput", "fontInjectionEnabled", "selectedFont"],
+    [STORAGE_KEYS.PERSIAN_INPUT, STORAGE_KEYS.FONT_INJECTION_ENABLED, STORAGE_KEYS.SELECTED_FONT],
     (data) => {
-      chrome.tabs.sendMessage(tabId, { type: "applySettings", data });
+      chrome.tabs.sendMessage(tabId, { type: MESSAGE_TYPES.APPLY_SETTINGS, data });
     }
   );
 }
@@ -24,16 +25,11 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   });
 });
 
-// Listen for settings changes and update all active Notion tabs
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && 
-      (changes.persianInput || changes.fontInjectionEnabled || changes.selectedFont)) {
-    // Get all Notion tabs and update them
-    chrome.tabs.query({ url: "*://*.notion.so/*" }, (tabs) => {
+  if (namespace === 'sync' && (changes[STORAGE_KEYS.PERSIAN_INPUT] || changes[STORAGE_KEYS.FONT_INJECTION_ENABLED] || changes[STORAGE_KEYS.SELECTED_FONT])) {
+    chrome.tabs.query({ url: NOTION_URL_PATTERN }, (tabs) => {
       tabs.forEach((tab) => {
-        if (tab.id) {
-          applySettingsToTab(tab.id);
-        }
+        if (tab.id) applySettingsToTab(tab.id);
       });
     });
   }

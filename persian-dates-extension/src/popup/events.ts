@@ -1,12 +1,13 @@
 import { persianToggle, fontToggle, resetButton, errorMessageEl, fontSelector, fontSelectorContainer, updateFontAuthor, showErrorMessage } from "./ui";
 import { saveSelectedFont } from "../fontInjection";
+import { STORAGE_KEYS, MESSAGE_TYPES } from "../constant";
 
 let altKeyPressed = false;
 
 export function initListeners() {
   persianToggle.addEventListener("change", () => {
     const enabled = persianToggle.checked;
-    chrome.storage.sync.set({ persianInput: enabled });
+    chrome.storage.sync.set({ [STORAGE_KEYS.PERSIAN_INPUT]: enabled });
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, { persianInput: enabled });
@@ -21,7 +22,7 @@ export function initListeners() {
 
   fontToggle.addEventListener('change', () => {
     const enabled = fontToggle.checked;
-    chrome.storage.sync.set({ fontInjectionEnabled: enabled });
+    chrome.storage.sync.set({ [STORAGE_KEYS.FONT_INJECTION_ENABLED]: enabled });
     if (enabled) {
       fontSelectorContainer.classList.add('visible');
     } else {
@@ -36,7 +37,6 @@ export function initListeners() {
 
   fontSelector.addEventListener('change', () => {
     const selectedFont = fontSelector.value;
-    // updateFontAuthor();
     saveSelectedFont(selectedFont).then(() => {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
         if (tabs[0]?.id) {
@@ -60,37 +60,14 @@ export function initListeners() {
     }
   });
 
-//   resetButton.addEventListener("click", () => {
-//     const forceReload = altKeyPressed;
-//     resetButton.disabled = true;
-//     errorMessageEl.style.display = 'none';
-//     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-//       if (tabs[0]?.id) {
-//         chrome.tabs.sendMessage(tabs[0].id, { 
-//           refreshConversion: true,
-//           forceReload
-//         }, () => {
-//           if (chrome.runtime.lastError) {
-//             resetButton.disabled = false;
-//           }
-//           if (forceReload) {
-//             window.close();
-//           }
-//         });
-//       } else {
-//         resetButton.disabled = false;
-//       }
-//     });
-//   });
-
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.resetComplete) {
+    if (message[MESSAGE_TYPES.RESET_COMPLETE]) {
       if (!message.reloading) {
         resetButton.disabled = false;
         setTimeout(checkForErrors, 500);
       }
     }
-    if (message.errorCountChanged !== undefined) {
+    if (message[MESSAGE_TYPES.ERROR_COUNT_CHANGED] !== undefined) {
       if (message.errorCount > 0) {
         showErrorMessage(message.errorCount);
       } else {
@@ -103,7 +80,7 @@ export function initListeners() {
 export function checkForErrors() {
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
     if (tabs[0]?.id) {
-      chrome.tabs.sendMessage(tabs[0].id, { checkErrors: true }, (response) => {
+      chrome.tabs.sendMessage(tabs[0].id, { [MESSAGE_TYPES.CHECK_ERRORS]: true }, (response) => {
         if (chrome.runtime.lastError) return;
         if (response && response.errorCount > 0) {
           showErrorMessage(response.errorCount);

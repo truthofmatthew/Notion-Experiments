@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fa">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Persian Calendar Widget</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            background: #f9f9f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            direction: rtl;
+        }
+        .calendar {
+            background: linear-gradient(#f9ebed, #f9f6f7);
+            border-radius: 15px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            padding: 10px;
+            width: 320px;
+        }
+        .header {
+            text-align: center;
+            font-weight: bold;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+        }
+        .nav button {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .month {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .weekdays, .days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            margin-top: 5px;
+            font-size: 12px;
+        }
+        .weekdays div {
+            color: #555;
+        }
+        .day {
+            padding: 5px 0;
+            border-radius: 6px;
+            position: relative;
+            height: 45px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            cursor: default;
+        }
+        .day.today {
+            background: #e0e0e0;
+            box-shadow: inset 0 0 0 1px #999;
+        }
+        .day.holiday {
+            color: red;
+        }
+        .gregorian {
+            font-size: 9px;
+            color: #888;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="calendar">
+        <div class="header" id="todayLabel"></div>
+        <div class="nav">
+            <button onclick="prevMonth()">&#10094;</button>
+            <div class="month" id="monthTitle"></div>
+            <button onclick="nextMonth()">&#10095;</button>
+        </div>
+        <div class="weekdays">
+            <div>ش</div><div>ی</div><div>د</div><div>س</div><div>چ</div><div>پ</div><div>ج</div>
+        </div>
+        <div class="days" id="calendarDays"></div>
+    </div>
+
+    <script>
+        let year = 1404, month = 1;
+
+        const today = new Date();
+        const todayIntl = new Intl.DateTimeFormat('fa-IR-u-ca-persian').formatToParts(today);
+        const todayObj = { year: +todayIntl.find(p => p.type === 'year').value, month: +todayIntl.find(p => p.type === 'month').value, day: +todayIntl.find(p => p.type === 'day').value };
+
+        function isToday(d) {
+            return todayObj.year === d.year && todayObj.month === d.month && todayObj.day === d.day;
+        }
+
+        async function load() {
+            const res = await fetch(`https://pnldev.com/api/calender?year=${year}&month=${month}`);
+            const json = await res.json();
+            const data = json.result;
+
+            document.getElementById('monthTitle').innerText = `${data[1].solar.year} ${getMonthName(data[1].solar.month)}`;
+            document.getElementById('todayLabel').innerText = `امروز: ${todayObj.year}/${todayObj.month}/${todayObj.day}`;
+
+            let firstDayIndex = getWeekIndex(data[1].solar.dayWeek);
+            let html = "";
+            for (let i = 0; i < firstDayIndex; i++) html += `<div></div>`;
+
+            Object.values(data).forEach(day => {
+                const isHoliday = day.holiday;
+                const isCurrentDay = isToday(day.solar);
+                html += `<div class="day ${isHoliday ? 'holiday' : ''} ${isCurrentDay ? 'today' : ''}">
+                            ${day.solar.day}
+                            <div class="gregorian">${day.gregorian.day}</div>
+                         </div>`;
+            });
+            document.getElementById('calendarDays').innerHTML = html;
+        }
+
+        function nextMonth() { month++; if (month > 12) { month = 1; year++; } load(); }
+        function prevMonth() { month--; if (month < 1) { month = 12; year--; } load(); }
+
+        function getWeekIndex(day) { return ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].indexOf(day); }
+        function getMonthName(m) {
+            return ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'][m-1];
+        }
+
+        load();
+    </script>
+</body>
+
+</html>
