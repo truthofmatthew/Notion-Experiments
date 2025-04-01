@@ -1,5 +1,11 @@
+/* // globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-white flex items-center justify-center; height: 100vh; margin: 0; direction: rtl; }
+body {
+    @apply bg-white;
+    margin: 0;
+    direction: rtl;
+  }
+  
