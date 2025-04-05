@@ -19,6 +19,6 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./demo  # change if needed
+          path: ./  # change if needed
 
       - uses: actions/deploy-pages@v4
