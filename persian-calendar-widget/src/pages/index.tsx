@@ -10,6 +10,7 @@ import WidgetsList from '../components/WidgetsList';
 import AboutMe from '../components/AboutMe';
 import FAQ from '../components/FAQ';
 import Footer from '../components/Footer';
+import Feedback from '../components/Feedback';
 
 const vazir = localFont({ src: '../fonts/Vazirmatn-Regular.woff2' });
 
@@ -28,6 +29,7 @@ export default function Home() {
       <AddCalendar />
       <WhyPersianCalendar />
       <WidgetsList />
+      <Feedback />
       <AboutMe />
       <FAQ />
       <Footer />

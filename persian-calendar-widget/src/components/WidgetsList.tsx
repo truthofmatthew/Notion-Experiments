@@ -69,7 +69,7 @@ export default function WidgetsList() {
           <div className="flex justify-center gap-8 flex-wrap">
             {cal.images.map((img, j) => (
               <div key={j} className="space-y-2">
-                <Image src={img.src} alt={img.alt} width={280} height={280} />
+                <Image src={img.src} alt={img.alt} width={140} height={140} />
                 <CopyButton link={img.link} />
               </div>
             ))}

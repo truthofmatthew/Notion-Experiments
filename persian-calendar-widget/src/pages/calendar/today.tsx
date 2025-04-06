@@ -32,7 +32,8 @@ export default function TodayWidget() {
   const weekDayName = ['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'];
   const getMonthName = (m: number) => ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'][m-1];
   const getWeekIndex = (d: string) => ['ش','ی','د','س','چ','پ','ج'].indexOf(d);
-  const toFa = (n: number) => n.toLocaleString('fa-IR');
+  const toFa = (n: number) => n.toLocaleString("fa-IR", { useGrouping: false });
+
 
   return (
     <div className={`${vazir.className} relative w-[140px] h-[140px] rounded-[20px] shadow-sm ${
